@@ -8,9 +8,8 @@
 <meta name="theme-color" content="#2A1B3D">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap">
 <style>
-:root{--bg:#FFF3E0;--card:#fff;--ink:#2A1B3D;--muted:#6b5b80;--a:#FF4F81;--b:#FFC21A;--c:#1FBF83;--d:#6C4DFF;--fd:'Lilita One','Arial Rounded MT Bold','Trebuchet MS',sans-serif;--fb:'Nunito','Segoe UI',system-ui,sans-serif;
+:root{--bg:#FFF3E0;--card:#fff;--ink:#2A1B3D;--muted:#6b5b80;--a:#FF4F81;--b:#FFC21A;--c:#1FBF83;--d:#6C4DFF;--fd:-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;--fb:-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#241636;--card:#33204A;--ink:#FFF3E0;--muted:#b9a8d0}}
 :root[data-theme="dark"]{--bg:#241636;--card:#33204A;--ink:#FFF3E0;--muted:#b9a8d0}
@@ -22,7 +21,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--fb);font-weight:600
 .scr{display:flex;flex-direction:column;flex:1}
 .in{animation:in .35s ease-out}
 @keyframes in{from{opacity:0;transform:translateY(24px) scale(.97)}}
-h1,h2{font-family:var(--fd);font-weight:400;margin:0}
+h1,h2{font-family:var(--fd);font-weight:800;margin:0}
 h2{font-size:30px;margin:8px 0 14px}
 p{margin:0 0 14px;color:var(--muted)}
 button,label.btn{font:inherit;color:inherit;cursor:pointer}
@@ -35,19 +34,19 @@ button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
 .gear:active{transform:rotate(90deg)}
 .tile,.btn{display:block;width:100%;border:0;border-radius:22px;box-shadow:0 6px 0 rgba(0,0,0,.25);text-align:left;transition:transform .12s}
 .tile{padding:16px 18px;margin:0 0 16px;display:flex;align-items:center;gap:14px}
-.tile b{display:block;font-family:var(--fd);font-weight:400;font-size:26px}
+.tile b{display:block;font-family:var(--fd);font-weight:800;font-size:26px}
 .tile span{font-size:15px;font-weight:600}
 .ic{flex:none;width:58px;height:58px;border-radius:18px;background:rgba(255,255,255,.3);display:grid;place-items:center;font-size:32px;animation:bob 3s ease-in-out infinite}
 @keyframes bob{50%{transform:translateY(-5px) rotate(6deg)}}
-.btn{padding:16px;margin:12px 0 0;font-family:var(--fd);font-size:24px;text-align:center;background:var(--b);color:#2A1B3D}
+.btn{padding:16px;margin:12px 0 0;font-family:var(--fd);font-weight:800;font-size:22px;text-align:center;background:var(--b);color:#2A1B3D}
 .tile:active,.btn:active{transform:translateY(4px) scale(.98);box-shadow:0 2px 0 rgba(0,0,0,.25)}
 .ta{background:var(--a);color:#fff}.tb{background:var(--b);color:#2A1B3D}.tc{background:var(--c);color:#12321f}.td{background:var(--d);color:#fff}.te{background:var(--ink);color:var(--bg)}
 .back{background:none;border:0;padding:8px 0;color:var(--muted);font-weight:800;text-align:left;align-self:flex-start}
 .card{background:var(--card);border-radius:24px;padding:26px 20px;text-align:center;margin:8px 0 6px;box-shadow:0 6px 0 rgba(0,0,0,.15);animation:pop .4s}
-.big{font-family:var(--fd);font-size:44px;line-height:1.1;margin:8px 0}
+.big{font-family:var(--fd);font-weight:800;font-size:44px;line-height:1.1;margin:8px 0}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 18px}
 .step{width:54px;height:54px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);font-size:28px;font-weight:800}
-.num{font-family:var(--fd);font-size:64px;text-align:center;animation:pop .35s}
+.num{font-family:var(--fd);font-weight:800;font-size:64px;text-align:center;animation:pop .35s}
 .chips{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 14px}
 .chip{border:3px solid var(--ink);background:transparent;border-radius:999px;padding:8px 16px;font-weight:800}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
@@ -142,6 +141,7 @@ theme();
 function setS(k,v){ST[k]=v;save();if(k==='theme')theme();sfx(k==='snd'&&!v?'':'pick');render()}
 /* sound engine */
 let ac,mg;
+let astream,mrec,mchunks;
 function A(){try{if(!ac){ac=new (window.AudioContext||window.webkitAudioContext)();mg=ac.createGain();mg.connect(ac.destination)}mg.gain.value=ST.vol;if(ac.state==='suspended')ac.resume();return ac}catch(e){return null}}
 function tone(f,d,t,v,to,at){const c=A();if(!c||!ST.snd)return;to=to||f;at=at||0;const o=c.createOscillator(),g=c.createGain(),t0=c.currentTime+at;o.type=t||'sine';o.frequency.setValueAtTime(f,t0);o.frequency.exponentialRampToValueAtTime(Math.max(1,to),t0+d);g.gain.setValueAtTime(v||.25,t0);g.gain.exponentialRampToValueAtTime(.001,t0+d);o.connect(g);g.connect(mg);o.start(t0);o.stop(t0+d)}
 function noise(d,v){const c=A();if(!c||!ST.snd)return;const n=Math.floor(c.sampleRate*d),b=c.createBuffer(1,n,c.sampleRate),a=b.getChannelData(0);for(let i=0;i<n;i++)a[i]=(Math.random()*2-1)*(1-i/n);const s=c.createBufferSource(),g=c.createGain();g.gain.value=v;s.buffer=b;s.connect(g);g.connect(mg);s.start()}
@@ -161,7 +161,7 @@ function sfx(n,a){try{SFX[n]&&SFX[n](a)}catch(e){}}
 function vib(ms){try{ST.vib&&navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(b)sfx(b.classList.contains('back')?'back':'tap')});
 /* state */
-let S={screen:'home',n:4,cat:'Makanan',hn:3,ni:1,mode:'blank',pts:[],names:(()=>{try{return JSON.parse(localStorage.getItem('picjo_n')||'[]')}catch(e){return[]}})()},bt,stream,lastKey=null;
+let S={screen:'home',n:4,cat:'Makanan',hn:3,ni:1,mode:'blank',mn:4,pts:[],names:(()=>{try{return JSON.parse(localStorage.getItem('picjo_n')||'[]')}catch(e){return[]}})()},bt,stream,lastKey=null;
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const nm=i=>esc((S.names[i-1]||'').trim()||'Pemain '+i);
 const names=n=>Array.from({length:n},(_,k)=>`<input class="nin" maxlength="14" placeholder="Pemain ${k+1}" value="${esc(S.names[k]||'')}" aria-label="Nama pemain ${k+1}" oninput="S.names[${k}]=this.value;saveN()">`).join('');
@@ -206,9 +206,63 @@ async function camStart(){try{stream=await navigator.mediaDevices.getUserMedia({
 function addRes(rgb){S.res.push({p:S.p,sc:score(rgb,hex(S.col[1])),rgb:rgb});sfx('shutter');vib(60);if(S.p>=S.hn){const w=[...S.res].sort((a,b)=>b.sc-a.sc)[0].p;S.pts[w-1]=(S.pts[w-1]||0)+1;stopCam();S.ph='result';render();setTimeout(()=>sfx('win'),250)}else{S.p++;render()}}
 function snap(){const v=document.getElementById('v');if(v&&v.videoWidth)addRes(avg(v,v.videoWidth,v.videoHeight))}
 function pickFile(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>addRes(avg(im,im.naturalWidth,im.naturalHeight));im.src=r.result};r.readAsDataURL(f)}
+
+const MIMICL=[
+"Gaya penyiar berita heboh: 'Breaking news, harga cabai melonjak malam ini!'",
+"Gaya ibu-ibu di grup WA: 'Woy jangan lupa arisan hari Minggu ya!'",
+"Gaya MC pernikahan: 'Bapak ibu, mari kita sambut pengantin dengan tepuk tangan meriah!'",
+"Gaya komentator bola kegirangan: 'Goool! Luar biasa tendangannya!'",
+"Gaya trailer film horor: 'Suatu malam, mereka tidak akan pernah kembali...'",
+"Gaya iklan infomersial: 'Cuma hari ini, beli satu gratis satu!'",
+"Gaya kapten kapal karam: 'Semua bertahan, kita akan selamat!'",
+"Gaya bos galak nagih deadline: 'Kerjaan kamu mana, sudah telat tiga hari!'",
+"Gaya tukang obat di pasar: 'Ayo mendekat, obat ini manjur segala penyakit!'",
+"Gaya reporter cuaca dramatis: 'Hujan deras diperkirakan melanda kota mulai sore ini!'",
+"Gaya vlogger kaget: 'Gilaa kalian gak akan percaya apa yang baru terjadi!'",
+"Gaya pembaca dongeng sebelum tidur: 'Pada zaman dahulu kala, hiduplah seorang raja...'",
+"Gaya orang curhat sedih: 'Aku capek banget hari ini, rasanya pengen nangis aja.'",
+"Gaya superhero pidato: 'Kejahatan tidak akan pernah menang selama aku ada di sini!'",
+"Gaya orang minta maaf lebay: 'Maafkan aku, aku menyesal sedalam-dalamnya!'",
+"Gaya penjual online: 'Buruan checkout, stok tinggal sedikit banget!'",
+"Gaya guru galak ngasih PR: 'Besok dikumpulkan, tidak ada alasan telat!'",
+"Gaya pramugari memberi instruksi: 'Mohon perhatian, kenakan sabuk pengaman anda.'",
+"Gaya detektif mengungkap kasus: 'Aku tahu siapa pelakunya, dan dia ada di ruangan ini.'",
+"Gaya anak kecil merengek: 'Aku mau itu, pokoknya aku mau sekarang juga!'"];
+function setMN(d){S.mn=Math.max(2,Math.min(6,S.mn+d));sfx('pick');render()}
+function mimicGo(){S.line=draw('mline',MIMICL);S.first=Math.floor(Math.random()*S.mn)+1;S.order=[...Array(S.mn).keys()].map(x=>x+1).filter(x=>x!==S.first);S.oi=0;S.ref=null;go({screen:'mimic',ph:'ready'})}
+function mimicNew(){S.pts=[];mimicGo()}
+const MAXDUR=6;
+function down(d,sr,t){const r=sr/t,n=Math.floor(d.length/r),o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=d[Math.floor(i*r)];return o}
+function pitchAC(buf,sr){const n=buf.length,minP=Math.floor(sr/450),maxP=Math.floor(sr/70);let best=-1,bv=0;for(let pr=minP;pr<=maxP;pr++){let sm=0;for(let i=0;i<n-pr;i++)sm+=buf[i]*buf[i+pr];if(sm>bv){bv=sm;best=pr}}return best>0?sr/best:0}
+function analyze(d,sr){const frame=1024,hop=512,pit=[],en=[];let mx=0;for(let i=0;i+frame<=d.length;i+=hop){const sub=d.subarray(i,i+frame);let sm=0;for(let j=0;j<sub.length;j++)sm+=sub[j]*sub[j];const rms=Math.sqrt(sm/sub.length);en.push(rms);if(rms>mx)mx=rms;pit.push(rms>0.006?pitchAC(sub,sr):0)}const th=mx*0.12;const pv=pit.map((f,i)=>en[i]>th&&f>0?f:0);return{pit:pv,en,valid:pv.filter(x=>x>0).length}}
+function fillHold(a){let last=0;return a.map(v=>{if(v>0){last=v;return v}return last})}
+function rs(a,n){if(!a.length)return new Array(n).fill(0);const o=[];for(let i=0;i<n;i++)o.push(a[Math.round(i*(a.length-1)/(n-1))]);return o}
+function zsc(a){const m=a.reduce((x,y)=>x+y,0)/a.length,sd=Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/a.length)||1;return a.map(x=>(x-m)/sd)}
+function corr(a,b){const za=zsc(a),zb=zsc(b);let sm=0;for(let i=0;i<za.length;i++)sm+=za[i]*zb[i];return sm/za.length}
+function cmpVoice(ref,att){if(ref.valid<4||att.valid<4)return{sc:Math.floor(10+Math.random()*15),low:true};const cp=corr(rs(fillHold(ref.pit),24),rs(fillHold(att.pit),24)),ce=corr(rs(ref.en,24),rs(att.en,24));return{sc:Math.max(5,Math.min(100,Math.round(50+50*(.65*cp+.35*ce)))),low:false}}
+function recStart(cb){navigator.mediaDevices.getUserMedia({audio:true}).then(st=>{astream=st;mchunks=[];try{mrec=new MediaRecorder(st)}catch(e){st.getTracks().forEach(t=>t.stop());S.ph='micerr';render();return}
+ mrec.ondataavailable=e=>{if(e.data&&e.data.size)mchunks.push(e.data)};
+ mrec.onstop=()=>{astream.getTracks().forEach(t=>t.stop());cb(new Blob(mchunks,{type:mrec.mimeType||'audio/webm'}))};
+ mrec.start();sfx('start');vib(50);S.rt=MAXDUR;render();
+ (function tick(){bt=setTimeout(()=>{S.rt--;if(S.rt<=0)recStop();else{sfx('tick',1);render();tick()}},1000)})();
+}).catch(()=>{S.ph='micerr';render()})}
+function recStop(){clearTimeout(bt);if(mrec&&mrec.state==='recording')mrec.stop()}
+function startKey(){S.ph='keyrec';render();recStart(b=>onRecDone(b,true))}
+function startMimic(){S.ph='rec';render();recStart(b=>onRecDone(b,false))}
+function onRecDone(blob,isKey){
+ blob.arrayBuffer().then(buf=>A().decodeAudioData(buf)).then(ab=>{
+  const a=analyze(down(ab.getChannelData(0),ab.sampleRate,8000),8000);
+  if(isKey){S.ref={url:URL.createObjectURL(blob),...a};S.ph='keydone';sfx('reveal')}
+  else{const r=cmpVoice(S.ref,a);S.res.push({p:S.order[S.oi],sc:r.sc,low:r.low});sfx(r.sc>=70?'win':'shutter');vib(60);S.oi++;
+   if(S.oi>=S.order.length){S.ph='result';const w=[...S.res].sort((x,y)=>y.sc-x.sc)[0].p;S.pts[w-1]=(S.pts[w-1]||0)+1;setTimeout(()=>sfx('win'),200)}else S.ph='nextready'}
+  render();
+ }).catch(()=>{if(isKey)S.ph='keydone';else{S.res.push({p:S.order[S.oi],sc:15,low:true});S.oi++;S.ph=S.oi>=S.order.length?'result':'nextready'}render()});
+}
+function playRef(){if(S.ref)try{new Audio(S.ref.url).play()}catch(e){}}
+function goMimicking(){S.res=[];S.oi=0;S.ph='nextready';render()}
 /* render */
 const back='<button class="back" onclick="home()">‹ Menu</button>';
-const TILES=[['ta','🕵️','Imposter','Semua tahu kata rahasia, kecuali satu orang.',"go({screen:'setup'})"],['tb','💣','Oper Bom','Oper HP terus. Yang pegang saat meledak kena hukuman.','bomb()'],['tc','🔢','Sebut 3 Hal','Sebut tiga hal sebelum giliran habis.',"prompt('n3')"],['td','🎭','Peragakan','Peragakan tanpa suara, yang lain menebak.',"prompt('act')"],['te','🎨','Cari Warna','Cari benda berwarna, lalu kamera menentukan pemenang.',"go({screen:'hsetup'})"],['tc','🗳️','Paling Mungkin','Voting: siapa yang paling mungkin di antara kalian.',"prompt('mp')"],['ta','🎲','Truth or Dare','Pilih jujur atau berani, kena ke yang dapat giliran.',"go({screen:'prompt',kind:'tod',text:null})"]];
+const TILES=[['ta','🕵️','Imposter','Semua tahu kata rahasia, kecuali satu orang.',"go({screen:'setup'})"],['tb','💣','Oper Bom','Oper HP terus. Yang pegang saat meledak kena hukuman.','bomb()'],['tc','🔢','Sebut 3 Hal','Sebut tiga hal sebelum giliran habis.',"prompt('n3')"],['td','🎭','Peragakan','Peragakan tanpa suara, yang lain menebak.',"prompt('act')"],['te','🎨','Cari Warna','Cari benda berwarna, lalu kamera menentukan pemenang.',"go({screen:'hsetup'})"],['tc','🗳️','Paling Mungkin','Voting: siapa yang paling mungkin di antara kalian.',"prompt('mp')"],['ta','🎲','Truth or Dare','Pilih jujur atau berani, kena ke yang dapat giliran.',"go({screen:'prompt',kind:'tod',text:null})"],['tb','🎙️','Tiru Suara','Tirukan gaya bicara, dinilai dari nada dan intonasi.',"go({screen:'msetup'})"]];
 const stepper=(v,f)=>`<div class="row"><button class="step" aria-label="Kurangi" onclick="${f}(-1)">−</button><span class="num" style="animation:none">${v}</span><button class="step" aria-label="Tambah" onclick="${f}(1)">+</button></div>`;
 const chips=(list,cur,fn)=>`<div class="chips">${list.map(x=>`<button class="chip" aria-pressed="${x[0]===cur}" onclick="${fn}(${typeof x[0]==='number'?x[0]:`'${x[0]}'`})">${x[1]}</button>`).join('')}</div>`;
 function render(){
@@ -254,6 +308,19 @@ function render(){
    const r=[...S.res].sort((a,b)=>b.sc-a.sc);
    h=`${back}<div class="emo" style="font-size:80px;margin:6px 0">🏆</div><h2 style="text-align:center">${nm(r[0].p)} menang!</h2><p style="text-align:center">Target: ${c[0]}</p>`+r.map(x=>`<div class="res"><div class="dot" style="background:rgb(${x.rgb.map(Math.round)})"></div><span style="width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm(x.p)}</span><div class="bar"><i style="width:${x.sc}%"></i></div><b>${x.sc}</b><small>🏆${S.pts[x.p-1]||0}</small></div>`).join('')+`<div class="sp"></div><button class="btn" onclick="huntGo()">Ronde baru</button>`;
   }
+ }else if(s==='msetup'){
+  h=`${back}<h2>🎙️ Atur Tiru Suara</h2><p>Jumlah pemain</p>${stepper(S.mn,'setMN')}<p>Nama pemain (boleh dikosongkan)</p>${names(S.mn)}<p>Satu pemain baca kalimat sebagai kunci, lalu yang lain gantian coba tiru gaya, nada, dan intonasinya. Sistem kasih skor dari kemiripannya.</p><div class="sp"></div><button class="btn" onclick="mimicNew()">Mulai</button>`;
+ }else if(s==='mimic'){
+  const ph=S.ph,line=`<div class="card"><div class="big" style="font-size:26px">${S.line}</div></div>`;
+  if(ph==='ready')h=`${back}<h2>🎙️ Tiru Suara</h2>${line}<p style="text-align:center">Pembaca kunci: <b>${nm(S.first)}</b>. Baca kalimat di atas dengan gaya yang diminta, nanti direkam ${MAXDUR} detik.</p><div class="sp"></div><button class="btn" onclick="startKey()">🎙️ Rekam Kunci</button>`;
+  else if(ph==='keyrec'||ph==='rec')h=`${back}<div class="bomb" style="font-size:100px">🎤</div><div class="num">${S.rt}</div><p style="text-align:center">Lagi merekam, baca sekarang...</p><button class="btn" style="background:var(--a);color:#fff" onclick="recStop()">⏹️ Selesai</button>`;
+  else if(ph==='micerr')h=`${back}<div class="card"><p>Mikrofon tidak bisa diakses. Izinkan mikrofon di browser lalu coba lagi.</p></div><div class="sp"></div><button class="btn" onclick="render()">Coba lagi</button>`;
+  else if(ph==='keydone')h=`${back}<h2>Kunci direkam!</h2>${line}<div class="sp"></div><button class="btn" style="background:var(--c);color:#12321f" onclick="playRef()">▶️ Dengar kunci</button><button class="btn" onclick="goMimicking()">Lanjut, giliran meniru</button>`;
+  else if(ph==='nextready')h=`${back}<h2>Giliran: ${nm(S.order[S.oi])}</h2>${line}<div class="sp"></div><button class="btn" style="background:var(--c);color:#12321f" onclick="playRef()">▶️ Dengar kunci</button><button class="btn" onclick="startMimic()">🎙️ Rekam & Tiru</button>`;
+  else if(ph==='result'){
+   const r=[...S.res].sort((a,b)=>b.sc-a.sc);
+   h=`${back}<div class="emo" style="font-size:80px;margin:6px 0">🏆</div><h2 style="text-align:center">${nm(r[0].p)} paling mirip!</h2>`+r.map(x=>`<div class="res"><span style="width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm(x.p)}</span><div class="bar"><i style="width:${x.sc}%"></i></div><b>${x.sc}</b><small>🏆${S.pts[x.p-1]||0}</small></div>`+(x.low?'<p style="font-size:12px;margin:-6px 0 10px">Suaranya kurang kedengeran</p>':'')).join('')+`<div class="sp"></div><button class="btn" onclick="mimicGo()">Ronde baru</button>`;
+  }
  }
  const key=s+(S.ph||'')+(S.boom?'b':'');
  const cls=key!==lastKey?'scr in':'scr';
@@ -262,6 +329,24 @@ function render(){
  app.innerHTML=`<div class="${cls}">${h}</div>`;
  const v=document.getElementById('v');if(v&&stream){v.srcObject=stream;try{v.play()}catch(e){}}
 }
+let baseSrc=null;
+fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>baseSrc=t).catch(()=>{});
+function showUpdateBanner(){
+ if(document.getElementById('upd'))return;
+ const d=document.createElement('div');d.id='upd';
+ d.style.cssText='position:fixed;left:12px;right:12px;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:999;background:var(--c);color:#12321f;padding:13px 16px;border-radius:16px;text-align:center;font-weight:800;font-family:var(--fb);box-shadow:0 6px 0 rgba(0,0,0,.25);cursor:pointer';
+ d.textContent='🔄 Update tersedia, tap untuk pakai versi terbaru';
+ d.onclick=()=>location.reload();
+ document.body.appendChild(d);
+}
+function checkUpdate(){
+ if(!baseSrc)return;
+ fetch('index.html?_='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{
+  if(t&&t!==baseSrc){if(S.screen==='home')location.reload();else showUpdateBanner()}
+ }).catch(()=>{});
+}
+setInterval(checkUpdate,45000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkUpdate()});
 render();
 if('serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 </script>
