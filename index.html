@@ -142,6 +142,7 @@ theme();
 function setS(k,v){ST[k]=v;save();if(k==='theme')theme();sfx(k==='snd'&&!v?'':'pick');render()}
 /* sound engine */
 let ac,mg;
+let astream,mrec,mchunks,VOICES=[];
 function A(){try{if(!ac){ac=new (window.AudioContext||window.webkitAudioContext)();mg=ac.createGain();mg.connect(ac.destination)}mg.gain.value=ST.vol;if(ac.state==='suspended')ac.resume();return ac}catch(e){return null}}
 function tone(f,d,t,v,to,at){const c=A();if(!c||!ST.snd)return;to=to||f;at=at||0;const o=c.createOscillator(),g=c.createGain(),t0=c.currentTime+at;o.type=t||'sine';o.frequency.setValueAtTime(f,t0);o.frequency.exponentialRampToValueAtTime(Math.max(1,to),t0+d);g.gain.setValueAtTime(v||.25,t0);g.gain.exponentialRampToValueAtTime(.001,t0+d);o.connect(g);g.connect(mg);o.start(t0);o.stop(t0+d)}
 function noise(d,v){const c=A();if(!c||!ST.snd)return;const n=Math.floor(c.sampleRate*d),b=c.createBuffer(1,n,c.sampleRate),a=b.getChannelData(0);for(let i=0;i<n;i++)a[i]=(Math.random()*2-1)*(1-i/n);const s=c.createBufferSource(),g=c.createGain();g.gain.value=v;s.buffer=b;s.connect(g);g.connect(mg);s.start()}
@@ -161,7 +162,7 @@ function sfx(n,a){try{SFX[n]&&SFX[n](a)}catch(e){}}
 function vib(ms){try{ST.vib&&navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(b)sfx(b.classList.contains('back')?'back':'tap')});
 /* state */
-let S={screen:'home',n:4,cat:'Makanan',hn:3,ni:1,mode:'blank',pts:[],names:(()=>{try{return JSON.parse(localStorage.getItem('picjo_n')||'[]')}catch(e){return[]}})()},bt,stream,lastKey=null;
+let S={screen:'home',n:4,cat:'Makanan',hn:3,ni:1,mode:'blank',mn:4,pts:[],names:(()=>{try{return JSON.parse(localStorage.getItem('picjo_n')||'[]')}catch(e){return[]}})()},bt,stream,lastKey=null;
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const nm=i=>esc((S.names[i-1]||'').trim()||'Pemain '+i);
 const names=n=>Array.from({length:n},(_,k)=>`<input class="nin" maxlength="14" placeholder="Pemain ${k+1}" value="${esc(S.names[k]||'')}" aria-label="Nama pemain ${k+1}" oninput="S.names[${k}]=this.value;saveN()">`).join('');
@@ -207,14 +208,63 @@ function addRes(rgb){S.res.push({p:S.p,sc:score(rgb,hex(S.col[1])),rgb:rgb});sfx
 function snap(){const v=document.getElementById('v');if(v&&v.videoWidth)addRes(avg(v,v.videoWidth,v.videoHeight))}
 function pickFile(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>addRes(avg(im,im.naturalWidth,im.naturalHeight));im.src=r.result};r.readAsDataURL(f)}
 /* render */
+
+/* --- Perpustakaan Suara (IndexedDB) --- */
+let idb;
+function dbOpen(){return new Promise((res,rej)=>{if(idb)return res(idb);const rq=indexedDB.open('picjo',1);rq.onupgradeneeded=()=>rq.result.createObjectStore('voices',{keyPath:'id',autoIncrement:true});rq.onsuccess=()=>{idb=rq.result;res(idb)};rq.onerror=()=>rej(rq.error)})}
+function voiceAdd(blob,name){return dbOpen().then(d=>new Promise((res,rej)=>{const tx=d.transaction('voices','readwrite');tx.objectStore('voices').add({name:name||'Suara acak',blob,ts:Date.now()});tx.oncomplete=res;tx.onerror=()=>rej(tx.error)}))}
+function voiceDelete(id){return dbOpen().then(d=>new Promise((res,rej)=>{const tx=d.transaction('voices','readwrite');tx.objectStore('voices').delete(id);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)}))}
+function voiceListRaw(){return dbOpen().then(d=>new Promise((res,rej)=>{const rq=d.transaction('voices','readonly').objectStore('voices').getAll();rq.onsuccess=()=>res(rq.result);rq.onerror=()=>rej(rq.error)}))}
+function refreshVoices(){return voiceListRaw().then(list=>{VOICES=list.map(v=>({...v,url:URL.createObjectURL(v.blob)}))}).catch(()=>{VOICES=[]})}
+function delVoice(id){voiceDelete(id).then(refreshVoices).then(render)}
+function pickVoice(){let used=[];try{used=JSON.parse(localStorage.getItem('picjo_uv')||'[]')}catch(e){}
+ let avail=VOICES.filter(v=>!used.includes(v.id));if(!avail.length){used=[];avail=VOICES.slice()}
+ const v=pick(avail);used.push(v.id);try{localStorage.setItem('picjo_uv',JSON.stringify(used))}catch(e){}return v}
+/* --- rekam & analisis suara --- */
+const MAXDUR=6;
+function down(d,sr,t){const r=sr/t,n=Math.floor(d.length/r),o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=d[Math.floor(i*r)];return o}
+function pitchAC(buf,sr){const n=buf.length,minP=Math.floor(sr/450),maxP=Math.floor(sr/70);let best=-1,bv=0;for(let pr=minP;pr<=maxP;pr++){let sm=0;for(let i=0;i<n-pr;i++)sm+=buf[i]*buf[i+pr];if(sm>bv){bv=sm;best=pr}}return best>0?sr/best:0}
+function analyzeBuf(d,sr){const frame=1024,hop=512,pit=[],en=[];let mx=0;for(let i=0;i+frame<=d.length;i+=hop){const sub=d.subarray(i,i+frame);let sm=0;for(let j=0;j<sub.length;j++)sm+=sub[j]*sub[j];const rms=Math.sqrt(sm/sub.length);en.push(rms);if(rms>mx)mx=rms;pit.push(rms>0.006?pitchAC(sub,sr):0)}const th=mx*0.12;const pv=pit.map((f,i)=>en[i]>th&&f>0?f:0);return{pit:pv,en,valid:pv.filter(x=>x>0).length}}
+function fillHold(a){let last=0;return a.map(v=>{if(v>0){last=v;return v}return last})}
+function rs(a,n){if(!a.length)return new Array(n).fill(0);const o=[];for(let i=0;i<n;i++)o.push(a[Math.round(i*(a.length-1)/(n-1))]);return o}
+function zsc(a){const m=a.reduce((x,y)=>x+y,0)/a.length,sd=Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/a.length)||1;return a.map(x=>(x-m)/sd)}
+function corr(a,b){const za=zsc(a),zb=zsc(b);let sm=0;for(let i=0;i<za.length;i++)sm+=za[i]*zb[i];return sm/za.length}
+function cmpVoice(ref,att){if(ref.valid<4||att.valid<4)return{sc:Math.floor(10+Math.random()*15),low:true};const cp=corr(rs(fillHold(ref.pit),24),rs(fillHold(att.pit),24)),ce=corr(rs(ref.en,24),rs(att.en,24));return{sc:Math.max(5,Math.min(100,Math.round(50+50*(.65*cp+.35*ce)))),low:false}}
+function ensureAnalyzed(v){if(v.valid!==undefined)return Promise.resolve();return v.blob.arrayBuffer().then(buf=>A().decodeAudioData(buf)).then(ab=>{Object.assign(v,analyzeBuf(down(ab.getChannelData(0),ab.sampleRate,8000),8000))}).catch(()=>Object.assign(v,{pit:[],en:[],valid:0}))}
+function recStart(cb){navigator.mediaDevices.getUserMedia({audio:true}).then(st=>{astream=st;mchunks=[];let r;try{r=mrec=new MediaRecorder(st)}catch(e){st.getTracks().forEach(t=>t.stop());S.ph='micerr';render();return}
+ r.ondataavailable=e=>{if(e.data&&e.data.size)mchunks.push(e.data)};
+ r.onstop=()=>{astream.getTracks().forEach(t=>t.stop());cb(new Blob(mchunks,{type:r.mimeType||'audio/webm'}))};
+ r.start();sfx('start');vib(50);S.rt=MAXDUR;render();
+ (function tick(){bt=setTimeout(()=>{S.rt--;if(S.rt<=0)recStop();else{sfx('tick',1);render();tick()}},1000)})();
+}).catch(()=>{S.ph='micerr';render()})}
+function recStop(){clearTimeout(bt);if(mrec&&mrec.state==='recording')mrec.stop()}
+/* --- perpustakaan: UI flow --- */
+function startLibRec(){S.ph='rec';render();recStart(b=>{S.tmpBlob=b;S.tmpUrl=URL.createObjectURL(b);S.ph='done';render()})}
+function saveLibVoice(){const inp=document.getElementById('vn'),name=(inp&&inp.value.trim())||'';voiceAdd(S.tmpBlob,name).then(refreshVoices).then(()=>{sfx('win');go({screen:'lib'})})}
+/* --- Tiru Suara: alur main --- */
+function setMN(d){S.mn=Math.max(2,Math.min(8,S.mn+d));sfx('pick');render()}
+function mimicNew(){S.pts=[];mimicGo()}
+function mimicGo(){if(!VOICES.length)return;S.voice=pickVoice();S.order=[...Array(S.mn).keys()].map(x=>x+1);S.oi=0;S.res=[];go({screen:'mimic',ph:'loading'});ensureAnalyzed(S.voice).then(()=>{S.ph='ready';render()})}
+function playRef(){if(S.voice)try{new Audio(S.voice.url).play()}catch(e){}}
+function goMimicking(){S.res=[];S.oi=0;S.ph='nextready';render()}
+function startMimic(){S.ph='rec';render();recStart(onRecDone)}
+function onRecDone(blob){
+ blob.arrayBuffer().then(buf=>A().decodeAudioData(buf)).then(ab=>{
+  const a=analyzeBuf(down(ab.getChannelData(0),ab.sampleRate,8000),8000),r=cmpVoice(S.voice,a);
+  S.res.push({p:S.order[S.oi],sc:r.sc,low:r.low});sfx(r.sc>=70?'win':'shutter');vib(60);S.oi++;
+  if(S.oi>=S.order.length){S.ph='result';const w=[...S.res].sort((x,y)=>y.sc-x.sc)[0].p;S.pts[w-1]=(S.pts[w-1]||0)+1;setTimeout(()=>sfx('win'),200)}else S.ph='nextready';
+  render();
+ }).catch(()=>{S.res.push({p:S.order[S.oi],sc:15,low:true});S.oi++;S.ph=S.oi>=S.order.length?'result':'nextready';render()});
+}
+refreshVoices();
 const back='<button class="back" onclick="home()">‹ Menu</button>';
-const TILES=[['ta','🕵️','Imposter','Semua tahu kata rahasia, kecuali satu orang.',"go({screen:'setup'})"],['tb','💣','Oper Bom','Oper HP terus. Yang pegang saat meledak kena hukuman.','bomb()'],['tc','🔢','Sebut 3 Hal','Sebut tiga hal sebelum giliran habis.',"prompt('n3')"],['td','🎭','Peragakan','Peragakan tanpa suara, yang lain menebak.',"prompt('act')"],['te','🎨','Cari Warna','Cari benda berwarna, lalu kamera menentukan pemenang.',"go({screen:'hsetup'})"],['tc','🗳️','Paling Mungkin','Voting: siapa yang paling mungkin di antara kalian.',"prompt('mp')"],['ta','🎲','Truth or Dare','Pilih jujur atau berani, kena ke yang dapat giliran.',"go({screen:'prompt',kind:'tod',text:null})"]];
+const TILES=[['ta','🕵️','Imposter','Semua tahu kata rahasia, kecuali satu orang.',"go({screen:'setup'})"],['tb','💣','Oper Bom','Oper HP terus. Yang pegang saat meledak kena hukuman.','bomb()'],['tc','🔢','Sebut 3 Hal','Sebut tiga hal sebelum giliran habis.',"prompt('n3')"],['td','🎭','Peragakan','Peragakan tanpa suara, yang lain menebak.',"prompt('act')"],['te','🎨','Cari Warna','Cari benda berwarna, lalu kamera menentukan pemenang.',"go({screen:'hsetup'})"],['tc','🗳️','Paling Mungkin','Voting: siapa yang paling mungkin di antara kalian.',"prompt('mp')"],['ta','🎲','Truth or Dare','Pilih jujur atau berani, kena ke yang dapat giliran.',"go({screen:'prompt',kind:'tod',text:null})"],['tb','🎙️','Tiru Suara','Dengar suara misteri dari perpustakaan, semua coba tiru gayanya.',"go({screen:'msetup'})"]];
 const stepper=(v,f)=>`<div class="row"><button class="step" aria-label="Kurangi" onclick="${f}(-1)">−</button><span class="num" style="animation:none">${v}</span><button class="step" aria-label="Tambah" onclick="${f}(1)">+</button></div>`;
 const chips=(list,cur,fn)=>`<div class="chips">${list.map(x=>`<button class="chip" aria-pressed="${x[0]===cur}" onclick="${fn}(${typeof x[0]==='number'?x[0]:`'${x[0]}'`})">${x[1]}</button>`).join('')}</div>`;
 function render(){
  let h='';const s=S.screen;
  if(s==='home'){
-  h=`<div class="top"><h1 class="logo" aria-label="picjo">${'picjo'.split('').map((c,i)=>`<span style="color:var(--${'abcda'[i]});animation-delay:${i*.15}s">${c}</span>`).join('')}</h1><button class="gear" aria-label="Pengaturan" onclick="go({screen:'settings'})">⚙️</button></div><p>Game seru buat rame-rame. Satu HP, dioper bergantian.</p>`+TILES.map((t,i)=>`<button class="tile ${t[0]}" onclick="${t[4]}"><div class="ic" style="animation-delay:${i*.3}s">${t[1]}</div><div><b>${t[2]}</b><span>${t[3]}</span></div></button>`).join('');
+  h=`<div class="top"><h1 class="logo" aria-label="picjo">${'picjo'.split('').map((c,i)=>`<span style="color:var(--${'abcda'[i]});animation-delay:${i*.15}s">${c}</span>`).join('')}</h1><button class="gear" aria-label="Pengaturan" onclick="go({screen:'settings'})">⚙️</button></div><p>Game seru buat rame-rame. Satu HP, dioper bergantian.</p>`+TILES.map((t,i)=>`<button class="tile ${t[0]}" onclick="${t[4]}"><div class="ic" style="animation-delay:${i*.3}s">${t[1]}</div><div><b>${t[2]}</b><span>${t[3]}</span></div></button>`).join('')+`<button class="tile" style="background:var(--card);color:var(--ink);border:3px solid var(--ink)" onclick="go({screen:'lib'})"><div class="ic" style="background:rgba(0,0,0,.06)">📼</div><div><b>Perpustakaan Suara</b><span>${VOICES.length} suara tersimpan. Buat mode Tiru Suara.</span></div></button>`;
  }else if(s==='settings'){
   h=`${back}<h2>⚙️ Pengaturan</h2>
   <div class="row"><span>Suara</span><button class="tgl" role="switch" aria-label="Suara" aria-checked="${ST.snd}" onclick="setS('snd',!ST.snd)"></button></div>
@@ -253,6 +303,27 @@ function render(){
   }else{
    const r=[...S.res].sort((a,b)=>b.sc-a.sc);
    h=`${back}<div class="emo" style="font-size:80px;margin:6px 0">🏆</div><h2 style="text-align:center">${nm(r[0].p)} menang!</h2><p style="text-align:center">Target: ${c[0]}</p>`+r.map(x=>`<div class="res"><div class="dot" style="background:rgb(${x.rgb.map(Math.round)})"></div><span style="width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm(x.p)}</span><div class="bar"><i style="width:${x.sc}%"></i></div><b>${x.sc}</b><small>🏆${S.pts[x.p-1]||0}</small></div>`).join('')+`<div class="sp"></div><button class="btn" onclick="huntGo()">Ronde baru</button>`;
+  }
+ }else if(s==='lib'){
+  h=`${back}<h2>📼 Perpustakaan Suara</h2><p>Rekam suara random, misalnya suara orang di jalan, bunyi lucu, atau apa aja. Nanti dipakai acak sebagai kunci di mode Tiru Suara.</p>`+(VOICES.length?VOICES.map(v=>`<div class="res"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(v.name)}</span><button class="chip" onclick="new Audio('${v.url}').play()">▶️</button><button class="chip" onclick="delVoice(${v.id})">🗑️</button></div>`).join(''):`<div class="card"><p>Belum ada suara tersimpan.</p></div>`)+`<div class="sp"></div><button class="btn" onclick="go({screen:'libRec',ph:'ready'})">🎙️ Rekam Suara Baru</button>`;
+ }else if(s==='libRec'){
+  const ph=S.ph;
+  if(ph==='ready')h=`${back}<h2>Rekam Suara Baru</h2><div class="card"><p>Rekam suara apa aja, maksimal ${MAXDUR} detik.</p></div><div class="sp"></div><button class="btn" onclick="startLibRec()">🎙️ Mulai Rekam</button>`;
+  else if(ph==='rec')h=`${back}<div class="bomb" style="font-size:100px">🎤</div><div class="num">${S.rt}</div><p style="text-align:center">Lagi merekam...</p><button class="btn" style="background:var(--a);color:#fff" onclick="recStop()">⏹️ Selesai</button>`;
+  else if(ph==='micerr')h=`${back}<div class="card"><p>Mikrofon tidak bisa diakses. Izinkan mikrofon di browser lalu coba lagi.</p></div><div class="sp"></div><button class="btn" onclick="go({screen:'libRec',ph:'ready'})">Coba lagi</button>`;
+  else if(ph==='done')h=`${back}<h2>Beri nama (opsional)</h2><div class="card"><button class="btn" style="background:var(--c);color:#12321f" onclick="new Audio(S.tmpUrl).play()">▶️ Dengar</button></div><input class="nin" id="vn" maxlength="24" placeholder="Nama suara, mis. Tukang bakso"><div class="sp"></div><button class="btn" onclick="saveLibVoice()">Simpan</button><button class="back" onclick="go({screen:'lib'})">Buang, jangan simpan</button>`;
+ }else if(s==='msetup'){
+  h=`${back}<h2>🎙️ Atur Tiru Suara</h2><p>Jumlah pemain</p>${stepper(S.mn,'setMN')}<p>Nama pemain (boleh dikosongkan)</p>${names(S.mn)}<p>${VOICES.length?`Ada ${VOICES.length} suara di Perpustakaan Suara. Satu dipilih acak tiap ronde, semua pemain gantian coba tiru.`:'Belum ada suara di Perpustakaan Suara. Rekam dulu sebelum mulai.'}</p><div class="sp"></div>`+(VOICES.length?`<button class="btn" onclick="mimicNew()">Mulai</button>`:`<button class="btn" onclick="go({screen:'lib'})">📼 Ke Perpustakaan Suara</button>`);
+ }else if(s==='mimic'){
+  const ph=S.ph;
+  if(ph==='loading')h=`${back}<div class="card"><p>Menyiapkan suara...</p></div>`;
+  else if(ph==='ready')h=`${back}<h2>Suara misteri!</h2><div class="card"><p>Dengar dulu suaranya. Semua pemain nanti gantian coba tiru gaya, nada, dan iramanya.</p></div><div class="sp"></div><button class="btn" style="background:var(--c);color:#12321f" onclick="playRef()">▶️ Putar Suara</button><button class="btn" onclick="goMimicking()">Mulai giliran meniru</button>`;
+  else if(ph==='rec')h=`${back}<div class="bomb" style="font-size:100px">🎤</div><div class="num">${S.rt}</div><p style="text-align:center">Lagi merekam, tirukan sekarang...</p><button class="btn" style="background:var(--a);color:#fff" onclick="recStop()">⏹️ Selesai</button>`;
+  else if(ph==='micerr')h=`${back}<div class="card"><p>Mikrofon tidak bisa diakses. Izinkan mikrofon di browser lalu coba lagi.</p></div><div class="sp"></div><button class="btn" onclick="render()">Coba lagi</button>`;
+  else if(ph==='nextready')h=`${back}<h2>Giliran: ${nm(S.order[S.oi])}</h2><div class="card"><p>Dengar lagi kalau perlu, lalu rekam tiruanmu.</p></div><div class="sp"></div><button class="btn" style="background:var(--c);color:#12321f" onclick="playRef()">▶️ Dengar lagi</button><button class="btn" onclick="startMimic()">🎙️ Rekam & Tiru</button>`;
+  else if(ph==='result'){
+   const r=[...S.res].sort((a,b)=>b.sc-a.sc);
+   h=`${back}<div class="emo" style="font-size:80px;margin:6px 0">🏆</div><h2 style="text-align:center">${nm(r[0].p)} paling mirip!</h2><p style="text-align:center">Suara: ${esc(S.voice.name)}</p>`+r.map(x=>`<div class="res"><span style="width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm(x.p)}</span><div class="bar"><i style="width:${x.sc}%"></i></div><b>${x.sc}</b><small>🏆${S.pts[x.p-1]||0}</small></div>`+(x.low?'<p style="font-size:12px;margin:-6px 0 10px">Suaranya kurang kedengeran</p>':'')).join('')+`<div class="sp"></div><button class="btn" onclick="mimicGo()">Ronde baru</button>`;
   }
  }
  const key=s+(S.ph||'')+(S.boom?'b':'');
