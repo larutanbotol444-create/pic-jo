@@ -70,6 +70,8 @@ input[type=range]{width:55%;accent-color:var(--a)}
 .bar i{display:block;height:100%;background:var(--c);border-radius:8px;animation:grow .8s ease-out}
 @keyframes grow{from{width:0!important}}
 .sp{flex:1}
+.eq{display:flex;align-items:flex-end;justify-content:center;gap:4px;height:60px;margin:10px 0}
+.eq i{display:block;width:6px;height:6px;border-radius:3px;background:var(--a);transition:height .05s linear}
 .nin{width:100%;border:3px solid var(--ink);border-radius:14px;background:var(--card);color:var(--ink);font:inherit;font-weight:800;padding:10px 14px;margin:0 0 10px}
 .bg{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0}
 .bg i{position:absolute;bottom:-50px;font-style:normal;font-size:28px;opacity:.22;animation:fl 14s linear infinite}
@@ -231,23 +233,37 @@ function zsc(a){const m=a.reduce((x,y)=>x+y,0)/a.length,sd=Math.sqrt(a.reduce((x
 function corr(a,b){const za=zsc(a),zb=zsc(b);let sm=0;for(let i=0;i<za.length;i++)sm+=za[i]*zb[i];return sm/za.length}
 function cmpVoice(ref,att){if(ref.valid<4||att.valid<4)return{sc:Math.floor(10+Math.random()*15),low:true};const cp=corr(rs(fillHold(ref.pit),24),rs(fillHold(att.pit),24)),ce=corr(rs(ref.en,24),rs(att.en,24));return{sc:Math.max(5,Math.min(100,Math.round(50+50*(.65*cp+.35*ce)))),low:false}}
 function ensureAnalyzed(v){if(v.valid!==undefined)return Promise.resolve();return v.blob.arrayBuffer().then(buf=>A().decodeAudioData(buf)).then(ab=>{Object.assign(v,analyzeBuf(down(ab.getChannelData(0),ab.sampleRate,8000),8000))}).catch(()=>Object.assign(v,{pit:[],en:[],valid:0}))}
+let vRAF,vSrc;
+function visStart(stream){const ctx=A();if(!ctx)return;const an=ctx.createAnalyser();an.fftSize=64;vSrc=ctx.createMediaStreamSource(stream);vSrc.connect(an);const data=new Uint8Array(an.frequencyBinCount);
+ (function loop(){an.getByteFrequencyData(data);const bars=document.querySelectorAll('#eq i');const n=bars.length;for(let i=0;i<n;i++){const idx=Math.floor(i*data.length/n);bars[i].style.height=(6+(data[idx]/255)*46)+'px'}vRAF=requestAnimationFrame(loop)})();
+}
+function visStop(){if(vRAF)cancelAnimationFrame(vRAF);vRAF=null;if(vSrc){try{vSrc.disconnect()}catch(e){}vSrc=null}}
+function playViz(url){if(!url)return;const a=new Audio(url);try{const ctx=A();const src=ctx.createMediaElementSource(a);const an=ctx.createAnalyser();an.fftSize=64;src.connect(an);an.connect(ctx.destination);const data=new Uint8Array(an.frequencyBinCount);let raf;
+ const loop=()=>{an.getByteFrequencyData(data);const bars=document.querySelectorAll('#eq i');const n=bars.length;for(let i=0;i<n;i++){const idx=Math.floor(i*data.length/n);bars[i].style.height=(6+(data[idx]/255)*46)+'px'}raf=requestAnimationFrame(loop)};
+ a.onplay=()=>loop();
+ a.onended=()=>{cancelAnimationFrame(raf);document.querySelectorAll('#eq i').forEach(b=>b.style.height='6px')};
+ a.play().catch(()=>{});
+}catch(e){a.play().catch(()=>{})}}
+function countIn(cb){S.ph='count';S.cd=3;render();vib(40);sfx('tick',1.3);
+ bt=setTimeout(function tick(){S.cd--;if(S.cd<=0)cb();else{vib(40);sfx('tick',1.3);render();bt=setTimeout(tick,700)}},700);
+}
 function recStart(cb){navigator.mediaDevices.getUserMedia({audio:true}).then(st=>{astream=st;mchunks=[];let r;try{r=mrec=new MediaRecorder(st)}catch(e){st.getTracks().forEach(t=>t.stop());S.ph='micerr';render();return}
  r.ondataavailable=e=>{if(e.data&&e.data.size)mchunks.push(e.data)};
- r.onstop=()=>{astream.getTracks().forEach(t=>t.stop());cb(new Blob(mchunks,{type:r.mimeType||'audio/webm'}))};
- r.start();sfx('start');vib(50);S.rt=MAXDUR;render();
+ r.onstop=()=>{visStop();astream.getTracks().forEach(t=>t.stop());cb(new Blob(mchunks,{type:r.mimeType||'audio/webm'}))};
+ r.start();sfx('start');vib(50);S.rt=MAXDUR;render();visStart(st);
  (function tick(){bt=setTimeout(()=>{S.rt--;if(S.rt<=0)recStop();else{sfx('tick',1);render();tick()}},1000)})();
 }).catch(()=>{S.ph='micerr';render()})}
 function recStop(){clearTimeout(bt);if(mrec&&mrec.state==='recording')mrec.stop()}
 /* --- perpustakaan: UI flow --- */
-function startLibRec(){S.ph='rec';render();recStart(b=>{S.tmpBlob=b;S.tmpUrl=URL.createObjectURL(b);S.ph='done';render()})}
+function startLibRec(){countIn(()=>{S.ph='rec';render();recStart(b=>{S.tmpBlob=b;S.tmpUrl=URL.createObjectURL(b);S.ph='done';render()})})}
 function saveLibVoice(){const inp=document.getElementById('vn'),name=(inp&&inp.value.trim())||'';voiceAdd(S.tmpBlob,name).then(refreshVoices).then(()=>{sfx('win');go({screen:'lib'})})}
 /* --- Tiru Suara: alur main --- */
 function setMN(d){S.mn=Math.max(2,Math.min(8,S.mn+d));sfx('pick');render()}
 function mimicNew(){S.pts=[];mimicGo()}
 function mimicGo(){if(!VOICES.length)return;S.voice=pickVoice();S.order=[...Array(S.mn).keys()].map(x=>x+1);S.oi=0;S.res=[];go({screen:'mimic',ph:'loading'});ensureAnalyzed(S.voice).then(()=>{S.ph='ready';render()})}
-function playRef(){if(S.voice)try{new Audio(S.voice.url).play()}catch(e){}}
+function playRef(){if(S.voice)playViz(S.voice.url)}
 function goMimicking(){S.res=[];S.oi=0;S.ph='nextready';render()}
-function startMimic(){S.ph='rec';render();recStart(onRecDone)}
+function startMimic(){countIn(()=>{S.ph='rec';render();recStart(onRecDone)})}
 function onRecDone(blob){
  blob.arrayBuffer().then(buf=>A().decodeAudioData(buf)).then(ab=>{
   const a=analyzeBuf(down(ab.getChannelData(0),ab.sampleRate,8000),8000),r=cmpVoice(S.voice,a);
@@ -309,18 +325,20 @@ function render(){
  }else if(s==='libRec'){
   const ph=S.ph;
   if(ph==='ready')h=`${back}<h2>Rekam Suara Baru</h2><div class="card"><p>Rekam suara apa aja, maksimal ${MAXDUR} detik.</p></div><div class="sp"></div><button class="btn" onclick="startLibRec()">🎙️ Mulai Rekam</button>`;
-  else if(ph==='rec')h=`${back}<div class="bomb" style="font-size:100px">🎤</div><div class="num">${S.rt}</div><p style="text-align:center">Lagi merekam...</p><button class="btn" style="background:var(--a);color:#fff" onclick="recStop()">⏹️ Selesai</button>`;
+  else if(ph==='rec')h=`${back}<div class="bomb" style="font-size:100px">🎤</div><div class="eq" id="eq"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="num">${S.rt}</div><p style="text-align:center">Lagi merekam...</p><button class="btn" style="background:var(--a);color:#fff" onclick="recStop()">⏹️ Selesai</button>`;
+  else if(ph==='count')h=`${back}<div class="num" style="font-size:110px">${S.cd}</div><p style="text-align:center">Bersiap-siap...</p>`;
   else if(ph==='micerr')h=`${back}<div class="card"><p>Mikrofon tidak bisa diakses. Izinkan mikrofon di browser lalu coba lagi.</p></div><div class="sp"></div><button class="btn" onclick="go({screen:'libRec',ph:'ready'})">Coba lagi</button>`;
-  else if(ph==='done')h=`${back}<h2>Beri nama (opsional)</h2><div class="card"><button class="btn" style="background:var(--c);color:#12321f" onclick="new Audio(S.tmpUrl).play()">▶️ Dengar</button></div><input class="nin" id="vn" maxlength="24" placeholder="Nama suara, mis. Tukang bakso"><div class="sp"></div><button class="btn" onclick="saveLibVoice()">Simpan</button><button class="back" onclick="go({screen:'lib'})">Buang, jangan simpan</button>`;
+  else if(ph==='done')h=`${back}<h2>Beri nama (opsional)</h2><div class="card"><button class="btn" style="background:var(--c);color:#12321f" onclick="playViz(S.tmpUrl)">▶️ Dengar</button><div class="eq" id="eq"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><input class="nin" id="vn" maxlength="24" placeholder="Nama suara, mis. Tukang bakso"><div class="sp"></div><button class="btn" onclick="saveLibVoice()">Simpan</button><button class="back" onclick="go({screen:'lib'})">Buang, jangan simpan</button>`;
  }else if(s==='msetup'){
   h=`${back}<h2>🎙️ Atur Tiru Suara</h2><p>Jumlah pemain</p>${stepper(S.mn,'setMN')}<p>Nama pemain (boleh dikosongkan)</p>${names(S.mn)}<p>${VOICES.length?`Ada ${VOICES.length} suara di Perpustakaan Suara. Satu dipilih acak tiap ronde, semua pemain gantian coba tiru.`:'Belum ada suara di Perpustakaan Suara. Rekam dulu sebelum mulai.'}</p><div class="sp"></div>`+(VOICES.length?`<button class="btn" onclick="mimicNew()">Mulai</button>`:`<button class="btn" onclick="go({screen:'lib'})">📼 Ke Perpustakaan Suara</button>`);
  }else if(s==='mimic'){
   const ph=S.ph;
   if(ph==='loading')h=`${back}<div class="card"><p>Menyiapkan suara...</p></div>`;
-  else if(ph==='ready')h=`${back}<h2>Suara misteri!</h2><div class="card"><p>Dengar dulu suaranya. Semua pemain nanti gantian coba tiru gaya, nada, dan iramanya.</p></div><div class="sp"></div><button class="btn" style="background:var(--c);color:#12321f" onclick="playRef()">▶️ Putar Suara</button><button class="btn" onclick="goMimicking()">Mulai giliran meniru</button>`;
-  else if(ph==='rec')h=`${back}<div class="bomb" style="font-size:100px">🎤</div><div class="num">${S.rt}</div><p style="text-align:center">Lagi merekam, tirukan sekarang...</p><button class="btn" style="background:var(--a);color:#fff" onclick="recStop()">⏹️ Selesai</button>`;
+  else if(ph==='ready')h=`${back}<h2>Suara misteri!</h2><div class="card"><p>Dengar dulu suaranya. Semua pemain nanti gantian coba tiru gaya, nada, dan iramanya.</p></div><div class="sp"></div><div class="eq" id="eq"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><button class="btn" style="background:var(--c);color:#12321f" onclick="playRef()">▶️ Putar Suara</button><button class="btn" onclick="goMimicking()">Mulai giliran meniru</button>`;
+  else if(ph==='rec')h=`${back}<div class="bomb" style="font-size:100px">🎤</div><div class="eq" id="eq"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="num">${S.rt}</div><p style="text-align:center">Lagi merekam, tirukan sekarang...</p><button class="btn" style="background:var(--a);color:#fff" onclick="recStop()">⏹️ Selesai</button>`;
+  else if(ph==='count')h=`${back}<div class="num" style="font-size:110px">${S.cd}</div><p style="text-align:center">Bersiap-siap niru...</p>`;
   else if(ph==='micerr')h=`${back}<div class="card"><p>Mikrofon tidak bisa diakses. Izinkan mikrofon di browser lalu coba lagi.</p></div><div class="sp"></div><button class="btn" onclick="render()">Coba lagi</button>`;
-  else if(ph==='nextready')h=`${back}<h2>Giliran: ${nm(S.order[S.oi])}</h2><div class="card"><p>Dengar lagi kalau perlu, lalu rekam tiruanmu.</p></div><div class="sp"></div><button class="btn" style="background:var(--c);color:#12321f" onclick="playRef()">▶️ Dengar lagi</button><button class="btn" onclick="startMimic()">🎙️ Rekam & Tiru</button>`;
+  else if(ph==='nextready')h=`${back}<h2>Giliran: ${nm(S.order[S.oi])}</h2><div class="card"><p>Dengar lagi kalau perlu, lalu rekam tiruanmu.</p></div><div class="sp"></div><div class="eq" id="eq"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><button class="btn" style="background:var(--c);color:#12321f" onclick="playRef()">▶️ Dengar lagi</button><button class="btn" onclick="startMimic()">🎙️ Rekam & Tiru</button>`;
   else if(ph==='result'){
    const r=[...S.res].sort((a,b)=>b.sc-a.sc);
    h=`${back}<div class="emo" style="font-size:80px;margin:6px 0">🏆</div><h2 style="text-align:center">${nm(r[0].p)} paling mirip!</h2><p style="text-align:center">Suara: ${esc(S.voice.name)}</p>`+r.map(x=>`<div class="res"><span style="width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm(x.p)}</span><div class="bar"><i style="width:${x.sc}%"></i></div><b>${x.sc}</b><small>🏆${S.pts[x.p-1]||0}</small></div>`+(x.low?'<p style="font-size:12px;margin:-6px 0 10px">Suaranya kurang kedengeran</p>':'')).join('')+`<div class="sp"></div><button class="btn" onclick="mimicGo()">Ronde baru</button>`;
