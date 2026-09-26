@@ -239,7 +239,7 @@ function fillHold(a){let last=0;return a.map(v=>{if(v>0){last=v;return v}return 
 function rs(a,n){if(!a.length)return new Array(n).fill(0);const o=[];for(let i=0;i<n;i++)o.push(a[Math.round(i*(a.length-1)/(n-1))]);return o}
 function zsc(a){const m=a.reduce((x,y)=>x+y,0)/a.length,sd=Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/a.length)||1;return a.map(x=>(x-m)/sd)}
 function corr(a,b){const za=zsc(a),zb=zsc(b);let sm=0;for(let i=0;i<za.length;i++)sm+=za[i]*zb[i];return sm/za.length}
-function cmpVoice(ref,att){if(ref.valid<4||att.valid<4)return{sc:Math.floor(10+Math.random()*15),low:true};const cp=corr(rs(fillHold(ref.pit),24),rs(fillHold(att.pit),24)),ce=corr(rs(ref.en,24),rs(att.en,24));return{sc:Math.max(5,Math.min(100,Math.round(50+50*(.65*cp+.35*ce)))),low:false}}
+function cmpVoice(ref,att){if(ref.valid<4||att.valid<4)return{sc:Math.floor(Math.random()*20),low:true};const cp=corr(rs(fillHold(ref.pit),24),rs(fillHold(att.pit),24)),ce=corr(rs(ref.en,24),rs(att.en,24));return{sc:Math.max(0,Math.min(100,Math.round(50+50*(.65*cp+.35*ce)))),low:false}}
 function waveOf(en){const w=rs(en,40);const mx=Math.max(...w,.001);return w.map(v=>Math.min(1,v/mx))}
 function ensureAnalyzed(v){if(v.valid!==undefined)return Promise.resolve();return v.blob.arrayBuffer().then(buf=>A().decodeAudioData(buf)).then(ab=>{const a=analyzeBuf(down(ab.getChannelData(0),ab.sampleRate,8000),8000);Object.assign(v,a,{wave:waveOf(a.en)})}).catch(()=>Object.assign(v,{pit:[],en:[],valid:0,wave:new Array(40).fill(.2)}))}
 function waveBars(arr,cls){return arr.map(h=>`<i style="height:${6+h*58}px"></i>`).join('')+(cls?'':'')}
