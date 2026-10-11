@@ -179,7 +179,7 @@ function sfx(n,a){try{SFX[n]&&SFX[n](a)}catch(e){}}
 function vib(ms){try{ST.vib&&navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(b)sfx(b.classList.contains('back')?'back':'tap')});
 /* state */
-let S={screen:'home',n:4,cat:'Makanan',hn:3,ni:1,mode:'blank',mn:4,pts:[],ostate:null,oerr:'',omode:'blank',names:(()=>{try{return JSON.parse(localStorage.getItem('picjo_n')||'[]')}catch(e){return[]}})()},bt,stream,lastKey=null;
+let S={screen:'home',n:4,cat:'Makanan',hn:3,ni:1,mode:'blank',mn:4,pts:[],ostate:null,oerr:'',omode:'blank',oni:1,names:(()=>{try{return JSON.parse(localStorage.getItem('picjo_n')||'[]')}catch(e){return[]}})()},bt,stream,lastKey=null;
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const nm=i=>esc((S.names[i-1]||'').trim()||'Pemain '+i);
 const names=n=>Array.from({length:n},(_,k)=>`<input class="nin" maxlength="14" placeholder="Pemain ${k+1}" value="${esc(S.names[k]||'')}" aria-label="Nama pemain ${k+1}" oninput="S.names[${k}]=this.value;saveN()">`).join('');
@@ -256,8 +256,10 @@ async function onJoinRoom(){
  S.ostate=st;subRoom(cd);go({screen:'room'});
 }
 function setOMode(m){S.omode=m;sfx('pick');render()}
+function setONI(d){const ps=(S.ostate&&S.ostate.players)||[],mx=Math.max(1,Math.floor(ps.length/2));S.oni=Math.max(1,Math.min(mx,S.oni+d));sfx('pick');render()}
 function startOnlineRound(cat){
  const st=S.ostate,ps=st.players||[];if(ps.length<2)return;
+ const niMax=Math.max(1,Math.floor(ps.length/2)),ni=Math.max(1,Math.min(niMax,S.oni||1));
  const mode=S.omode||'blank',uw=st.usedWords||{};
  let word,word2=null,nuw=uw;
  if(mode==='mirip'){
@@ -271,8 +273,8 @@ function startOnlineRound(cat){
   if(!avail.length){used=[];avail=WORDS[cat].slice()}
   word=pick(avail);used=[...used,word];nuw={...uw,[cat]:used};
  }
- const imp=ps[Math.floor(Math.random()*ps.length)].id;
- roomSave({...st,phase:'reveal',cat,mode,word,word2,impId:imp,round:(st.round||0)+1,usedWords:nuw});
+ const impIds=ps.map(p=>p.id).sort(()=>Math.random()-.5).slice(0,ni);
+ roomSave({...st,phase:'reveal',cat,mode,word,word2,impIds,round:(st.round||0)+1,usedWords:nuw});
 }
 function endOnlineRound(){roomSave({...S.ostate,phase:'ended'})}
 function onlineNewRound(){roomSave({...S.ostate,phase:'lobby'})}
@@ -450,12 +452,12 @@ function render(){
   else{
    const isHost=st.hostId===MYID,ps=st.players||[];
    if(st.phase==='lobby'){
-    h=`<button class="back" onclick="leaveRoom()">‹ Keluar Room</button><h2>Lobi</h2><div class="code">${S.room}</div><p style="text-align:center">Kasih kode ini ke temen buat gabung.</p>`+ps.map(p=>`<div class="plist">👤 ${esc(p.name)}${p.id===st.hostId?' (host)':''}</div>`).join('')+(isHost?`<p>Mode</p>${chips([['blank','Blank'],['mirip','Kata Mirip']],S.omode,'setOMode')}<p>Kategori kata</p>${chips(Object.keys(WORDS).map(c=>[c,c]),S.cat,'setCat')}<div class="sp"></div><button class="btn" onclick="startOnlineRound(S.cat)" ${ps.length<2?'disabled':''}>${ps.length<2?'Nunggu pemain lain...':'Mulai Ronde'}</button>`:`<div class="sp"></div><div class="card"><p>Nunggu host mulai ronde...</p></div>`);
+    h=`<button class="back" onclick="leaveRoom()">‹ Keluar Room</button><h2>Lobi</h2><div class="code">${S.room}</div><p style="text-align:center">Kasih kode ini ke temen buat gabung.</p>`+ps.map(p=>`<div class="plist">👤 ${esc(p.name)}${p.id===st.hostId?' (host)':''}</div>`).join('')+(isHost?`<p>Mode</p>${chips([['blank','Blank'],['mirip','Kata Mirip']],S.omode,'setOMode')}<p>Jumlah imposter</p>${stepper(Math.min(S.oni,Math.max(1,Math.floor(ps.length/2))),'setONI')}<p>Kategori kata</p>${chips(Object.keys(WORDS).map(c=>[c,c]),S.cat,'setCat')}<div class="sp"></div><button class="btn" onclick="startOnlineRound(S.cat)" ${ps.length<2?'disabled':''}>${ps.length<2?'Nunggu pemain lain...':'Mulai Ronde'}</button>`:`<div class="sp"></div><div class="card"><p>Nunggu host mulai ronde...</p></div>`);
    }else if(st.phase==='reveal'){
-    const im=MYID===st.impId,mirip=st.mode==='mirip';
+    const impIds=st.impIds||(st.impId?[st.impId]:[]),im=impIds.includes(MYID),mirip=st.mode==='mirip';
     h=`<button class="back" onclick="leaveRoom()">‹ Keluar Room</button><h2>Ronde ${st.round}</h2><div class="card">${im&&!mirip?`<div class="big" style="color:var(--a)">Kamu Imposter</div><p>Pura-pura tahu kata rahasianya.</p>`:`<p>Kata rahasia</p><div class="big">${esc(im?st.word2:st.word)}</div>`}</div>`+(isHost?`<div class="sp"></div><button class="btn" style="background:var(--a);color:#fff" onclick="endOnlineRound()">Selesai, buka imposter</button>`:`<div class="sp"></div><div class="card"><p>Diskusi bareng-bareng, host yang buka imposter kalau udah selesai.</p></div>`);
    }else{
-    h=`<button class="back" onclick="leaveRoom()">‹ Keluar Room</button><h2>Imposter: ${nameOf(st,st.impId)}</h2><p style="text-align:center">${st.mode==='mirip'?`Kata biasa: ${esc(st.word)}. Kata imposter: ${esc(st.word2)}`:`Katanya: ${esc(st.word)}`}</p>`+(isHost?`<div class="sp"></div><button class="btn" onclick="onlineNewRound()">Ronde baru</button>`:`<div class="sp"></div><div class="card"><p>Nunggu host mulai ronde baru...</p></div>`);
+    h=`<button class="back" onclick="leaveRoom()">‹ Keluar Room</button><h2>Imposter: ${impIds.map(id=>nameOf(st,id)).join(', ')}</h2><p style="text-align:center">${st.mode==='mirip'?`Kata biasa: ${esc(st.word)}. Kata imposter: ${esc(st.word2)}`:`Katanya: ${esc(st.word)}`}</p>`+(isHost?`<div class="sp"></div><button class="btn" onclick="onlineNewRound()">Ronde baru</button>`:`<div class="sp"></div><div class="card"><p>Nunggu host mulai ronde baru...</p></div>`);
    }
   }
  }
