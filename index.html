@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>picjo</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#2A1B3D">
 <link rel="icon" href="icon-192.png">
@@ -70,6 +71,8 @@ input[type=range]{width:55%;accent-color:var(--a)}
 .bar i{display:block;height:100%;background:var(--c);border-radius:8px;animation:grow .8s ease-out}
 @keyframes grow{from{width:0!important}}
 .sp{flex:1}
+.code{font-family:var(--fd);font-weight:800;font-size:54px;letter-spacing:8px;text-align:center;margin:10px 0}
+.plist{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card);border-radius:14px;margin:0 0 8px;font-weight:800}
 .eq{display:flex;align-items:flex-end;justify-content:center;gap:4px;height:60px;margin:10px 0}
 .eq i{display:block;width:6px;height:6px;border-radius:3px;background:var(--a);transition:height .05s linear}
 .wave{position:relative;height:74px;background:#12121f;border:2px solid var(--ink);border-radius:14px;padding:0 10px;overflow:hidden;margin:10px 0}
@@ -152,6 +155,10 @@ theme();
 function setS(k,v){ST[k]=v;save();if(k==='theme')theme();sfx(k==='snd'&&!v?'':'pick');render()}
 /* sound engine */
 let ac,mg;
+const SB_URL='https://lpgkzvwemmlhtaibjrhw.supabase.co',SB_KEY='sb_publishable_BPkJoBAzcUjgG0YXcc8bwg_OjvJ95Y8';
+let sb=null;try{sb=window.supabase&&window.supabase.createClient(SB_URL,SB_KEY)}catch(e){}
+let MYID=localStorage.getItem('picjo_myid');if(!MYID){MYID=(crypto.randomUUID?crypto.randomUUID():'p'+Math.random().toString(36).slice(2));try{localStorage.setItem('picjo_myid',MYID)}catch(e){}}
+let roomCh=null;
 let astream,mrec,mchunks,VOICES=[];
 function A(){try{if(!ac){ac=new (window.AudioContext||window.webkitAudioContext)();mg=ac.createGain();mg.connect(ac.destination)}mg.gain.value=ST.vol;if(ac.state==='suspended')ac.resume();return ac}catch(e){return null}}
 function tone(f,d,t,v,to,at){const c=A();if(!c||!ST.snd)return;to=to||f;at=at||0;const o=c.createOscillator(),g=c.createGain(),t0=c.currentTime+at;o.type=t||'sine';o.frequency.setValueAtTime(f,t0);o.frequency.exponentialRampToValueAtTime(Math.max(1,to),t0+d);g.gain.setValueAtTime(v||.25,t0);g.gain.exponentialRampToValueAtTime(.001,t0+d);o.connect(g);g.connect(mg);o.start(t0);o.stop(t0+d)}
@@ -172,7 +179,7 @@ function sfx(n,a){try{SFX[n]&&SFX[n](a)}catch(e){}}
 function vib(ms){try{ST.vib&&navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(b)sfx(b.classList.contains('back')?'back':'tap')});
 /* state */
-let S={screen:'home',n:4,cat:'Makanan',hn:3,ni:1,mode:'blank',mn:4,pts:[],names:(()=>{try{return JSON.parse(localStorage.getItem('picjo_n')||'[]')}catch(e){return[]}})()},bt,stream,lastKey=null;
+let S={screen:'home',n:4,cat:'Makanan',hn:3,ni:1,mode:'blank',mn:4,pts:[],ostate:null,oerr:'',omode:'blank',names:(()=>{try{return JSON.parse(localStorage.getItem('picjo_n')||'[]')}catch(e){return[]}})()},bt,stream,lastKey=null;
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const nm=i=>esc((S.names[i-1]||'').trim()||'Pemain '+i);
 const names=n=>Array.from({length:n},(_,k)=>`<input class="nin" maxlength="14" placeholder="Pemain ${k+1}" value="${esc(S.names[k]||'')}" aria-label="Nama pemain ${k+1}" oninput="S.names[${k}]=this.value;saveN()">`).join('');
@@ -217,6 +224,63 @@ async function camStart(){try{stream=await navigator.mediaDevices.getUserMedia({
 function addRes(rgb){S.res.push({p:S.p,sc:score(rgb,hex(S.col[1])),rgb:rgb});sfx('shutter');vib(60);if(S.p>=S.hn){const w=[...S.res].sort((a,b)=>b.sc-a.sc)[0].p;S.pts[w-1]=(S.pts[w-1]||0)+1;stopCam();S.ph='result';render();setTimeout(()=>sfx('win'),250)}else{S.p++;render()}}
 function snap(){const v=document.getElementById('v');if(v&&v.videoWidth)addRes(avg(v,v.videoWidth,v.videoHeight))}
 function pickFile(i){const f=i.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>addRes(avg(im,im.naturalWidth,im.naturalHeight));im.src=r.result};r.readAsDataURL(f)}
+
+/* --- Main Online (Supabase Realtime) --- */
+function genCode(){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let o='';for(let i=0;i<4;i++)o+=c[Math.floor(Math.random()*c.length)];return o}
+function nameOf(st,id){const p=(st.players||[]).find(x=>x.id===id);return p?esc(p.name):'???'}
+function subRoom(code){
+ if(roomCh)try{sb.removeChannel(roomCh)}catch(e){}
+ roomCh=sb.channel('room:'+code).on('postgres_changes',{event:'UPDATE',schema:'public',table:'picjo_rooms',filter:'code=eq.'+code},p=>{S.ostate=p.new.state;render()}).subscribe();
+}
+function roomSave(ns){S.ostate=ns;render();sb.from('picjo_rooms').update({state:ns}).eq('code',S.room).then(({error})=>{if(error){S.oerr='Gagal update room.';render()}})}
+async function onCreateRoom(){
+ const nm=(document.getElementById('ocn')||{}).value||'';if(!nm.trim()){S.oerr='Isi nama dulu.';render();return}
+ S.oerr='';render();
+ const code=genCode(),st={phase:'lobby',hostId:MYID,players:[{id:MYID,name:nm.trim()}],round:0};
+ const{error}=await sb.from('picjo_rooms').insert({code,state:st});
+ if(error){S.oerr='Gagal bikin room, coba lagi.';render();return}
+ S.room=code;S.ostate=st;subRoom(code);go({screen:'room'});
+}
+async function onJoinRoom(){
+ const nm=(document.getElementById('ocn2')||{}).value||'',cdRaw=(document.getElementById('ocj')||{}).value||'';
+ const cd=cdRaw.trim().toUpperCase();
+ if(!nm.trim()||!cd){S.oerr='Isi kode dan nama dulu.';render();return}
+ S.oerr='';render();
+ const{data,error}=await sb.from('picjo_rooms').select('state').eq('code',cd).maybeSingle();
+ if(error||!data){S.oerr='Room gak ketemu, cek lagi kodenya.';render();return}
+ const st=data.state,ex=(st.players||[]).find(x=>x.id===MYID);
+ if(!ex)st.players=[...(st.players||[]),{id:MYID,name:nm.trim()}];
+ S.room=cd;
+ const{error:e2}=await sb.from('picjo_rooms').update({state:st}).eq('code',cd);
+ if(e2){S.oerr='Gagal join, coba lagi.';render();return}
+ S.ostate=st;subRoom(cd);go({screen:'room'});
+}
+function setOMode(m){S.omode=m;sfx('pick');render()}
+function startOnlineRound(cat){
+ const st=S.ostate,ps=st.players||[];if(ps.length<2)return;
+ const mode=S.omode||'blank',uw=st.usedWords||{};
+ let word,word2=null,nuw=uw;
+ if(mode==='mirip'){
+  const key='mirip:'+cat;let used=uw[key]||[],avail=PAIRS[cat].filter(pr=>!used.includes(pr));
+  if(!avail.length){used=[];avail=PAIRS[cat].slice()}
+  const prStr=pick(avail);used=[...used,prStr];
+  let pr=prStr.split('/');if(Math.random()<.5)pr.reverse();
+  word=pr[0];word2=pr[1];nuw={...uw,[key]:used};
+ }else{
+  let used=uw[cat]||[],avail=WORDS[cat].filter(w=>!used.includes(w));
+  if(!avail.length){used=[];avail=WORDS[cat].slice()}
+  word=pick(avail);used=[...used,word];nuw={...uw,[cat]:used};
+ }
+ const imp=ps[Math.floor(Math.random()*ps.length)].id;
+ roomSave({...st,phase:'reveal',cat,mode,word,word2,impId:imp,round:(st.round||0)+1,usedWords:nuw});
+}
+function endOnlineRound(){roomSave({...S.ostate,phase:'ended'})}
+function onlineNewRound(){roomSave({...S.ostate,phase:'lobby'})}
+function leaveRoom(){
+ if(roomCh){try{sb.removeChannel(roomCh)}catch(e){}roomCh=null}
+ if(S.ostate&&S.room){const ps=(S.ostate.players||[]).filter(p=>p.id!==MYID);sb.from('picjo_rooms').update({state:{...S.ostate,players:ps}}).eq('code',S.room).then(()=>{})}
+ S.room=null;S.ostate=null;home();
+}
 /* render */
 
 /* --- Perpustakaan Suara (IndexedDB) --- */
@@ -310,7 +374,7 @@ const chips=(list,cur,fn)=>`<div class="chips">${list.map(x=>`<button class="chi
 function render(){
  let h='';const s=S.screen;
  if(s==='home'){
-  h=`<div class="top"><h1 class="logo" aria-label="picjo">${'picjo'.split('').map((c,i)=>`<span style="color:var(--${'abcda'[i]});animation-delay:${i*.15}s">${c}</span>`).join('')}</h1><button class="gear" aria-label="Pengaturan" onclick="go({screen:'settings'})">⚙️</button></div><p>Game seru buat rame-rame. Satu HP, dioper bergantian.</p>`+TILES.map((t,i)=>`<button class="tile ${t[0]}" onclick="${t[4]}"><div class="ic" style="animation-delay:${i*.3}s">${t[1]}</div><div><b>${t[2]}</b><span>${t[3]}</span></div></button>`).join('')+`<button class="tile" style="background:var(--card);color:var(--ink);border:3px solid var(--ink)" onclick="go({screen:'lib'})"><div class="ic" style="background:rgba(0,0,0,.06)">📼</div><div><b>Perpustakaan Suara</b><span>${VOICES.length} suara tersimpan. Buat mode Tiru Suara.</span></div></button>`;
+  h=`<div class="top"><h1 class="logo" aria-label="picjo">${'picjo'.split('').map((c,i)=>`<span style="color:var(--${'abcda'[i]});animation-delay:${i*.15}s">${c}</span>`).join('')}</h1><button class="gear" aria-label="Pengaturan" onclick="go({screen:'settings'})">⚙️</button></div><p>Game seru buat rame-rame. Satu HP, dioper bergantian.</p><button class="tile" style="background:var(--d);color:#fff" onclick="go({screen:'online'})"><div class="ic">🌐</div><div><b>Main Online</b><span>Imposter lewat beberapa HP sekaligus, pakai kode room.</span></div></button>`+TILES.map((t,i)=>`<button class="tile ${t[0]}" onclick="${t[4]}"><div class="ic" style="animation-delay:${i*.3}s">${t[1]}</div><div><b>${t[2]}</b><span>${t[3]}</span></div></button>`).join('')+`<button class="tile" style="background:var(--card);color:var(--ink);border:3px solid var(--ink)" onclick="go({screen:'lib'})"><div class="ic" style="background:rgba(0,0,0,.06)">📼</div><div><b>Perpustakaan Suara</b><span>${VOICES.length} suara tersimpan. Buat mode Tiru Suara.</span></div></button>`;
  }else if(s==='settings'){
   h=`${back}<h2>⚙️ Pengaturan</h2>
   <div class="row"><span>Suara</span><button class="tgl" role="switch" aria-label="Suara" aria-checked="${ST.snd}" onclick="setS('snd',!ST.snd)"></button></div>
@@ -373,6 +437,26 @@ function render(){
   else if(ph==='result'){
    const r=[...S.res].sort((a,b)=>b.sc-a.sc);
    h=`${back}<div class="emo" style="font-size:80px;margin:6px 0">🏆</div><h2 style="text-align:center">${nm(r[0].p)} paling mirip!</h2><p style="text-align:center">Suara: ${esc(S.voice.name)}</p>`+r.map(x=>`<div class="res"><span style="width:92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm(x.p)}</span><div class="bar"><i style="width:${x.sc}%"></i></div><b>${x.sc}</b><small>🏆${S.pts[x.p-1]||0}</small></div>`+(x.low?'<p style="font-size:12px;margin:-6px 0 10px">Suaranya kurang kedengeran</p>':'')).join('')+`<div class="sp"></div><button class="btn" onclick="mimicGo()">Ronde baru</button>`;
+  }
+ }else if(s==='online'){
+  h=`${back}<h2>🌐 Main Online</h2><p>Main Imposter bareng lewat beberapa HP sekaligus, pakai satu internet. Kata rahasia langsung kekirim ke HP masing-masing, gak perlu oper HP.</p><div class="card"><p style="margin:0;font-size:13px">Catatan: ini butuh internet aktif di semua HP, dan belum bisa dicoba di pratinjau ini, baru jalan setelah di-upload ke hosting (GitHub Pages).</p></div><div class="sp"></div><button class="btn" onclick="S.oerr='';go({screen:'onCreate'})">Buat Room</button><button class="btn" style="background:var(--c);color:#12321f" onclick="S.oerr='';go({screen:'onJoin'})">Gabung Room</button>`;
+ }else if(s==='onCreate'){
+  h=`${back}<h2>Buat Room</h2><input class="nin" id="ocn" maxlength="14" placeholder="Nama kamu">${S.oerr?`<p style="color:var(--a)">${esc(S.oerr)}</p>`:''}<div class="sp"></div><button class="btn" onclick="onCreateRoom()">Buat</button>`;
+ }else if(s==='onJoin'){
+  h=`${back}<h2>Gabung Room</h2><input class="nin" id="ocj" maxlength="6" placeholder="Kode room" style="text-transform:uppercase"><input class="nin" id="ocn2" maxlength="14" placeholder="Nama kamu">${S.oerr?`<p style="color:var(--a)">${esc(S.oerr)}</p>`:''}<div class="sp"></div><button class="btn" onclick="onJoinRoom()">Gabung</button>`;
+ }else if(s==='room'){
+  const st=S.ostate;
+  if(!st){h=`${back}<div class="card"><p>Room gak ditemukan.</p></div>`;}
+  else{
+   const isHost=st.hostId===MYID,ps=st.players||[];
+   if(st.phase==='lobby'){
+    h=`<button class="back" onclick="leaveRoom()">‹ Keluar Room</button><h2>Lobi</h2><div class="code">${S.room}</div><p style="text-align:center">Kasih kode ini ke temen buat gabung.</p>`+ps.map(p=>`<div class="plist">👤 ${esc(p.name)}${p.id===st.hostId?' (host)':''}</div>`).join('')+(isHost?`<p>Mode</p>${chips([['blank','Blank'],['mirip','Kata Mirip']],S.omode,'setOMode')}<p>Kategori kata</p>${chips(Object.keys(WORDS).map(c=>[c,c]),S.cat,'setCat')}<div class="sp"></div><button class="btn" onclick="startOnlineRound(S.cat)" ${ps.length<2?'disabled':''}>${ps.length<2?'Nunggu pemain lain...':'Mulai Ronde'}</button>`:`<div class="sp"></div><div class="card"><p>Nunggu host mulai ronde...</p></div>`);
+   }else if(st.phase==='reveal'){
+    const im=MYID===st.impId,mirip=st.mode==='mirip';
+    h=`<button class="back" onclick="leaveRoom()">‹ Keluar Room</button><h2>Ronde ${st.round}</h2><div class="card">${im&&!mirip?`<div class="big" style="color:var(--a)">Kamu Imposter</div><p>Pura-pura tahu kata rahasianya.</p>`:`<p>Kata rahasia</p><div class="big">${esc(im?st.word2:st.word)}</div>`}</div>`+(isHost?`<div class="sp"></div><button class="btn" style="background:var(--a);color:#fff" onclick="endOnlineRound()">Selesai, buka imposter</button>`:`<div class="sp"></div><div class="card"><p>Diskusi bareng-bareng, host yang buka imposter kalau udah selesai.</p></div>`);
+   }else{
+    h=`<button class="back" onclick="leaveRoom()">‹ Keluar Room</button><h2>Imposter: ${nameOf(st,st.impId)}</h2><p style="text-align:center">${st.mode==='mirip'?`Kata biasa: ${esc(st.word)}. Kata imposter: ${esc(st.word2)}`:`Katanya: ${esc(st.word)}`}</p>`+(isHost?`<div class="sp"></div><button class="btn" onclick="onlineNewRound()">Ronde baru</button>`:`<div class="sp"></div><div class="card"><p>Nunggu host mulai ronde baru...</p></div>`);
+   }
   }
  }
  const key=s+(S.ph||'')+(S.boom?'b':'');
